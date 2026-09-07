@@ -1,0 +1,269 @@
+"use client";
+
+import { useReducer, useState } from "react";
+import { useRouter } from "next/navigation";
+import { api } from "@/trpc/react";
+import * as Icons from "@phosphor-icons/react";
+import { useJournals } from "@/lib/journals-context";
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+const COLOR_OPTIONS = [
+  { value: "#6E56CF", label: "Purple" },
+  { value: "#D47B9A", label: "Rose" },
+  { value: "#E5484D", label: "Red" },
+  { value: "#EC60B4", label: "Pink" },
+  { value: "#F7978D", label: "Salmon" },
+  { value: "#F3B294", label: "Peach" },
+  { value: "#F79F6E", label: "Orange" },
+  { value: "#13C296", label: "Teal" },
+  { value: "#30B2F2", label: "Sky" },
+  { value: "#3E63DD", label: "Blue" },
+  { value: "#8BA3E8", label: "Periwinkle" },
+  { value: "#8E9DF7", label: "Lavender" },
+  { value: "#FFFFFF", label: "White" },
+  { value: "linear-gradient(135deg, #6e56cf 0%, #ea580c 50%, #e11d48 100%)", label: "Sunset" },
+  { value: "linear-gradient(135deg, #3b82f6 0%, #06b6d4 50%, #10b981 100%)", label: "Ocean" },
+];
+
+const ICON_OPTIONS = [
+  "MaskHappy", "Smiley", "SmileyWink", "SmileySad", "SmileyMeh", "Heart",
+  "Sparkle", "Star", "Crown", "Trophy", "House", "Bed",
+  "Tree", "Leaf", "Mountains", "Sun", "Moon", "CloudRain",
+  "Flame", "Lightning", "Snowflake", "Globe", "BookOpen", "Notebook",
+  "Pen", "Palette", "MusicNotes", "Camera", "Airplane", "Bicycle",
+  "Car", "Briefcase", "Key", "Lightbulb", "Coffee", "Wine",
+  "Pizza", "Gift", "Clock", "Compass", "Brain", "Medal",
+  "Dog", "Cat", "Anchor", "PuzzlePiece", "Signpost", "Hourglass"
+];
+
+const QUICK_MOODS = [
+  { label: "Calm 😌", text: "Calm" },
+  { label: "Reflective 🤔", text: "Reflective" },
+  { label: "Happy 😊", text: "Happy" },
+  { label: "Tired 😴", text: "Tired" },
+  { label: "Anxious 😰", text: "Anxious" },
+  { label: "Excited ⚡", text: "Excited" },
+];
+
+interface NewJournalDialogProps {
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}
+
+type FormState = {
+  title: string;
+  mood: string;
+  selectedColor: string;
+  selectedIcon: string;
+  errorMsg: string;
+};
+
+const initialFormState: FormState = {
+  title: "",
+  mood: "",
+  selectedColor: "#6E56CF",
+  selectedIcon: "MaskHappy",
+  errorMsg: "",
+};
+
+type FormAction =
+  | { type: "SET_FIELD"; field: keyof FormState; value: string }
+  | { type: "RESET" };
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  switch (action.type) {
+    case "SET_FIELD":
+      return { ...state, [action.field]: action.value };
+    case "RESET":
+      return initialFormState;
+  }
+}
+
+export default function NewJournalDialog({ children, defaultOpen = false }: NewJournalDialogProps) {
+  const router = useRouter();
+  const { refetch: refetchJournals } = useJournals();
+  const [open, setOpen] = useState(defaultOpen);
+  const [form, dispatch] = useReducer(formReducer, initialFormState);
+
+  const createJournal = api.journal.create.useMutation({
+    onSuccess: (data) => {
+      setOpen(false);
+      refetchJournals();
+      router.push(`/write/${data.journal.id}`);
+    },
+    onError: (err) => {
+      dispatch({ type: "SET_FIELD", field: "errorMsg", value: err.message || "Failed to create journal. Please try again." });
+    }
+  });
+
+  const handleDone = () => {
+    if (!form.title.trim()) {
+      dispatch({ type: "SET_FIELD", field: "errorMsg", value: "Please enter a journal name." });
+      return;
+    }
+    dispatch({ type: "SET_FIELD", field: "errorMsg", value: "" });
+    createJournal.mutate({
+      title: form.title.trim(),
+      mood: form.mood.trim() || undefined,
+      icon: form.selectedIcon,
+      color: form.selectedColor,
+    });
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      dispatch({ type: "RESET" });
+    }
+  };
+
+  const PreviewIcon = (Icons[form.selectedIcon as keyof typeof Icons] ?? Icons.BookOpen) as React.ElementType;
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger nativeButton={false} render={<span />}>
+        {children}
+      </DialogTrigger>
+      <DialogContent
+        showCloseButton={false}
+        className="!border !border-white/15 !bg-[#121212] !rounded-[28px] !p-6 !shadow-2xl !shadow-black/90 !max-w-[480px] !ring-0 flex flex-col gap-6 font-satoshi select-none text-white"
+      >
+        {/* Dynamic Icon Preview */}
+        <div className="flex justify-center pt-2">
+          <div
+            className="w-24 h-24 rounded-full flex items-center justify-center text-white shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-500 ease-out hover:scale-105"
+            style={{ background: form.selectedColor }}
+          >
+            <PreviewIcon size={48} weight="duotone" />
+          </div>
+        </div>
+
+        {/* Form Inputs */}
+        <div className="flex flex-col gap-4">
+          {/* Journal Title */}
+          <input
+            type="text"
+            placeholder="Journal Name"
+            value={form.title}
+            onChange={(e) => dispatch({ type: "SET_FIELD", field: "title", value: e.target.value })}
+            aria-label="Journal name"
+            className="w-full bg-transparent border-b border-white/20 focus:border-white px-2 py-3 text-center text-white placeholder-white/40 font-instrument text-2xl font-normal transition-colors focus:outline-none"
+          />
+
+          {/* Journal Mood */}
+          <div className="flex flex-col gap-2">
+            <input
+              type="text"
+              placeholder="How are you feeling today?"
+              value={form.mood}
+              onChange={(e) => dispatch({ type: "SET_FIELD", field: "mood", value: e.target.value })}
+              aria-label="Current mood"
+              className="w-full bg-transparent border-b border-white/15 focus:border-white/40 px-2 py-2 text-center text-white placeholder-white/30 font-satoshi text-sm italic transition-colors focus:outline-none"
+            />
+            {/* Quick Mood Shortcuts */}
+            <div className="flex flex-wrap gap-1.5 justify-center mt-1">
+              {QUICK_MOODS.map((m) => (
+                <button
+                  key={m.text}
+                  type="button"
+                  onClick={() => dispatch({ type: "SET_FIELD", field: "mood", value: m.text })}
+                  className={`text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer font-satoshi ${form.mood.toLowerCase() === m.text.toLowerCase()
+                    ? "border-white bg-white/15 text-white"
+                    : "border-white/15 text-white/50 hover:border-white/30 hover:text-white/80"
+                    }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Colors Carousel/Row */}
+        <div className="flex flex-col gap-2.5">
+          <span className="text-[10px] tracking-[0.1em] uppercase text-white/50 font-satoshi font-medium px-1">Select theme color</span>
+          <div className="flex gap-2 overflow-x-auto p-2 no-scrollbar scroll-smooth">
+            {COLOR_OPTIONS.map((c) => {
+              const isSelected = form.selectedColor === c.value;
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => dispatch({ type: "SET_FIELD", field: "selectedColor", value: c.value })}
+                  className={`w-7 h-7 rounded-full shrink-0 transition-all cursor-pointer relative flex items-center justify-center hover:scale-110 active:scale-95 ${isSelected ? "ring-2 ring-white ring-offset-2 ring-offset-[#121212]" : "opacity-75 hover:opacity-100"
+                    }`}
+                  style={{ background: c.value }}
+                  title={c.label}
+                >
+                  {isSelected && (
+                    <div className="w-1.5 h-1.5 rounded-full bg-white mix-blend-difference" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Icons Grid */}
+        <div className="flex flex-col gap-2.5">
+          <span className="text-[10px] tracking-[0.1em] uppercase text-white/50 font-satoshi font-medium px-1">Select journal icon</span>
+          <div className="grid grid-cols-7 gap-2 justify-items-center max-h-[200px] overflow-y-auto p-2 border border-white/10 rounded-[16px] bg-white/[0.03] no-scrollbar">
+            {ICON_OPTIONS.map((iconName) => {
+              const IconComp = (Icons[iconName as keyof typeof Icons] ?? Icons.BookOpen) as React.ElementType;
+              const isSelected = form.selectedIcon === iconName;
+              return (
+                <button
+                  key={iconName}
+                  type="button"
+                  onClick={() => dispatch({ type: "SET_FIELD", field: "selectedIcon", value: iconName })}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 ${isSelected
+                    ? "bg-white text-black shadow-sm scale-105"
+                    : "text-white/40 hover:text-white hover:bg-white/10"
+                    }`}
+                >
+                  <IconComp size={18} weight={isSelected ? "bold" : "regular"} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {form.errorMsg && (
+          <p className="text-red-400 text-xs text-center font-satoshi font-medium animate-pulse">
+            {form.errorMsg}
+          </p>
+        )}
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-3 pt-2 mt-1">
+          <button
+            type="button"
+            onClick={() => handleOpenChange(false)}
+            className="px-5 py-2.5 text-white/70 hover:text-white border border-white/15 hover:border-white/30 bg-white/5 hover:bg-white/10 rounded-full text-sm font-satoshi font-medium transition-all cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={createJournal.isPending}
+            onClick={handleDone}
+            className="px-6 py-2.5 bg-white hover:bg-white/90 disabled:bg-white/20 text-black rounded-full text-sm font-satoshi font-semibold transition-all cursor-pointer shadow-lg disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {createJournal.isPending ? (
+              <>
+                <Icons.CircleNotch size={16} className="animate-spin text-black" />
+                Creating...
+              </>
+            ) : (
+              "Done"
+            )}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
