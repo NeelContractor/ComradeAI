@@ -359,6 +359,9 @@ export default function SignUpPage() {
           </div>
         </div>
 
+        {/* Clerk's CAPTCHA widget */}
+        <div id="clerk-captcha" />
+
         <button
           type="submit"
           className="auth-btn-primary"

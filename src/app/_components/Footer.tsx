@@ -100,7 +100,7 @@ export default function Footer() {
             <span>Built with love by</span>
             <div className="relative h-6 w-6 overflow-hidden rounded-full border border-white/20">
               <Image
-                src="/myy.jpeg"
+                src="/myy.jpg"
                 alt="neel avatar"
                 fill
                 className="object-cover"

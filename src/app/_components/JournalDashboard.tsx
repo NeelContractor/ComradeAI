@@ -151,6 +151,8 @@ export default function JournalDashboard({ activeJournalId }: JournalDashboardPr
 
   const editorRef = useRef<MilkdownEditorHandle>(null);
   const [localTitle, setLocalTitle] = useState<string | null>(null);
+  const titleRef = useRef<string | null>(null);
+  titleRef.current = localTitle;
   const [prevActiveJournalId, setPrevActiveJournalId] = useState(activeJournalId);
   if (activeJournalId !== prevActiveJournalId) {
     setPrevActiveJournalId(activeJournalId);
@@ -159,7 +161,7 @@ export default function JournalDashboard({ activeJournalId }: JournalDashboardPr
 
   const { data: activeData, isLoading: activeLoading } = api.journal.get.useQuery(
     { id: activeJournalId! },
-    { enabled: !!activeJournalId }
+    { enabled: !!activeJournalId, staleTime: 5 * 60 * 1000 }
   );
 
   // Guard: if the journal ID was provided but the journal doesn't exist, redirect back
@@ -171,6 +173,7 @@ export default function JournalDashboard({ activeJournalId }: JournalDashboardPr
   }, [activeJournalId, activeLoading, activeData, router]);
 
   const saveJournal = api.journal.save.useMutation();
+  const utils = api.useUtils();
 
   const journal = activeData?.journal;
   const title = localTitle ?? journal?.title ?? "";
@@ -179,20 +182,29 @@ export default function JournalDashboard({ activeJournalId }: JournalDashboardPr
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSave = useCallback(() => {
     if (!activeJournalId) return;
+    const editor = editorRef.current;
+    if (!editor || !editor.isReady()) return;
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
     }
     setSaveStatus("saving");
     debounceTimer.current = setTimeout(() => {
       const content = editorRef.current?.getMarkdown() ?? "";
+      if (!content.trim()) return;
       saveJournal.mutate(
         {
           id: activeJournalId,
-          title: localTitle ?? undefined,
+          title: titleRef.current ?? undefined,
           content
         },
         {
-          onSuccess: () => {
+          onSuccess: (data) => {
+            if (data?.journal) {
+              utils.journal.get.setData(
+                { id: activeJournalId },
+                { journal: data.journal },
+              );
+            }
             refetchJournals();
             setSaveStatus("saved");
             setTimeout(() => setSaveStatus("idle"), 2000);
@@ -203,7 +215,7 @@ export default function JournalDashboard({ activeJournalId }: JournalDashboardPr
         }
       );
     }, 1500);
-  }, [activeJournalId, saveJournal, localTitle, refetchJournals]);
+  }, [activeJournalId, saveJournal, refetchJournals]);
 
   useEffect(() => {
     return () => {
@@ -323,6 +335,7 @@ export default function JournalDashboard({ activeJournalId }: JournalDashboardPr
 
                   <div className="writing-area mt-4 min-h-[500px] text-white">
                     <MilkdownEditorClient
+                      key={activeJournalId}
                       ref={editorRef}
                       defaultValue={journal?.content ?? ""}
                       onChange={autoSave}

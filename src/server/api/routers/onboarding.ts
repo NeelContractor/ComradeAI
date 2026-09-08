@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, createTRPCRouter } from "@/server/api/trpc";
 import { db } from "@/db/drizzle";
 import { users } from "@/db/schema";
+import { getUserIdByClerkId } from "@/server/api/helpers/get-user-id";
 import { VALID_CHARACTER_IDS } from "@/lib/characters";
 import { Memory } from "@/lib/memory";
 import { splitByMarkdownSections } from "@/lib/text-utils";
@@ -12,6 +13,7 @@ const memoryInstance = Memory.getInstance();
 
 export const onboardingRouter = createTRPCRouter({
   getOnboardingStatus: protectedProcedure.query(async ({ ctx }) => {
+    const userId = await getUserIdByClerkId(ctx.session.userId!);
     const user = await db
       .select({
         isOnboarded: users.isOnboarded,
@@ -21,7 +23,7 @@ export const onboardingRouter = createTRPCRouter({
         preferredSpeaker: users.preferredSpeaker,
       })
       .from(users)
-      .where(eq(users.clerkId, ctx.session.userId!))
+      .where(eq(users.id, userId))
       .then((rows) => rows[0]);
 
     if (!user) {
@@ -43,6 +45,7 @@ export const onboardingRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const userId = await getUserIdByClerkId(ctx.session.userId!);
       await db
         .update(users)
         .set({
@@ -53,7 +56,7 @@ export const onboardingRouter = createTRPCRouter({
           isOnboarded: true,
           updatedAt: new Date(),
         })
-        .where(eq(users.clerkId, ctx.session.userId!));
+        .where(eq(users.id, userId));
 
       return { success: true };
     }),

@@ -192,6 +192,9 @@ export default function SignInPage() {
           </div>
         </div>
 
+        {/* Clerk's CAPTCHA widget */}
+        <div id="clerk-captcha" />
+
         <button
           type="submit"
           className="auth-btn-primary"
